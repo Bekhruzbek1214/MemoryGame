@@ -2,134 +2,147 @@ package com.example.memorygame.presenter.screen.game
 
 import android.os.Bundle
 import android.view.View
+import android.view.ViewGroup
 import android.widget.ImageView
+import android.widget.Toast
+import androidx.core.view.setMargins
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.viewModels
+import androidx.lifecycle.lifecycleScope
 import by.kirich1409.viewbindingdelegate.viewBinding
 import com.example.memorygame.R
+import com.example.memorygame.data.CardData
+import com.example.memorygame.data.LevelEnum
 import com.example.memorygame.databinding.ScreenGameBinding
+import com.example.memorygame.presenter.screen.closeAnim
+import com.example.memorygame.presenter.screen.game.viewmodelGame.GameViewModel
+import com.example.memorygame.presenter.screen.game.viewmodelGame.GameViewModelImp
+import com.example.memorygame.presenter.screen.hideAnim
+import com.example.memorygame.presenter.screen.openFirstAnim
+import com.example.memorygame.presenter.screen.openSecondAnim
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 
 class GameScreen : Fragment(R.layout.screen_game) {
     private val binding by viewBinding(ScreenGameBinding::bind)
-    private val x = 4
-    private val y = 6
+    private val viewModel: GameViewModel by viewModels<GameViewModelImp>()
     private val views = ArrayList<ImageView>()
-    private var cardHeight = 0f
     private var cardWidth = 0f
-    private var clickCounts = 0
-    private var firstClickIndex = -1
-    private var secondClickIndex = -1
-    val back = R.drawable.image_back
-    private val images = arrayListOf(
-        Triple(0, R.drawable.image_1, back),
-        Triple(1, R.drawable.image_1, back),
-        Triple(2, R.drawable.image_1, back),
-        Triple(3, R.drawable.image_2, back),
-        Triple(4, R.drawable.image_2, back),
-        Triple(5, R.drawable.image_2, back),
-        Triple(6, R.drawable.image_2, back),
-        Triple(7, R.drawable.image_2, back),
-        Triple(8, R.drawable.image_2, back),
-        Triple(9, R.drawable.image_2, back),
-        Triple(10, R.drawable.image_2, back),
-        Triple(11, R.drawable.image_2, back),
-        Triple(12, R.drawable.image_2, back),
-        Triple(13, R.drawable.image_2, back),
-        Triple(14, R.drawable.image_2, back),
-        Triple(15, R.drawable.image_2, back),
-        Triple(16, R.drawable.image_2, back),
-        Triple(17, R.drawable.image_2, back),
-        Triple(18, R.drawable.image_2, back),
-        Triple(19, R.drawable.image_2, back),
-        Triple(20, R.drawable.image_2, back),
-        Triple(21, R.drawable.image_2, back),
-        Triple(22, R.drawable.image_2, back),
-        Triple(23, R.drawable.image_2, back),
-        Triple(24, R.drawable.image_2, back)
-
-    )
-
-    private val ROTATION_ANGLE = 89f
-    private val ANIMATION_DURATION = 1000L
+    private var cardHeight = 0f
+    private var firstIndex = -1
+    private var secondIndex = -1
+    private var level = LevelEnum.EASY
+    private var findCardCount = 0
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        level = requireArguments().getSerializable("level") as LevelEnum
         binding.container.post {
-            cardWidth = binding.container.width.toFloat() / x
-            cardHeight = binding.container.height.toFloat() / y
+            cardHeight = binding.container.height.toFloat() / level.verCount
+            cardWidth = binding.container.width.toFloat() / level.horCount
 
-            addImages()
+            viewModel.loadCardByLevel(level)
         }
+
+        viewModel.cardFlow
+            .onEach { loadViews(level, it)}
+            .launchIn(lifecycleScope)
+
+        viewModel.closeAllViewSFlow
+            .onEach { closeAllViews() }
+            .launchIn(lifecycleScope)
     }
 
-    private fun addImages() {
-        for (i in 0 until x) {
-            for (j in 0 until y) {
-                var temp = 0;
+    private fun loadViews(levelEnum: LevelEnum, ls: List<CardData>){
+        for (i in 0 until levelEnum.horCount){
+            for(j in 0 until levelEnum.verCount){
                 val img = ImageView(requireContext())
+
                 img.x = i * cardWidth
                 img.y = j * cardHeight
-
-                img.setImageResource(images[temp++].third)
+                binding.container.addView(img)
+                img.isClickable = false
+                img.tag = ls[i*levelEnum.verCount + j]
+                img.setImageResource(ls[i*levelEnum.verCount + j].resID)
                 views.add(img)
 
-                binding.container.addView(img)
-                img.layoutParams.apply {
-                    height = cardHeight.toInt()
-                    width = cardWidth.toInt()
+                val lp = img.layoutParams as ViewGroup.MarginLayoutParams
+                lp.apply {
+                    lp.width = cardWidth.toInt()
+                    lp.height = cardHeight.toInt()
+                    lp.setMargins(50)
                 }
+                img.layoutParams = lp
+            }
+        }
+        clickReaction()
+    }
 
-                img.setOnClickListener{
-                    clickImage(images[view?.id!!].second, images[view?.id!!])
-                }
-
-
+    private fun closeAllViews(){
+        views.forEach{image ->
+            image.closeAnim{
+                image.isClickable = true
             }
         }
     }
 
-    private fun clickImage(imageView: Int, triple: Triple<Int, Int, Int>) {
-        triple[]
+    private fun clickReaction(){
+        views.forEachIndexed { index, imageView ->
+            imageView.setOnClickListener{
+                if(firstIndex != -1 && secondIndex != -1) return@setOnClickListener
+                if(index == firstIndex || index == secondIndex) return@setOnClickListener
+
+
+                if(firstIndex == -1){
+                    firstIndex = index
+                    imageView.openFirstAnim()
+                }else{
+                    secondIndex = index
+                    imageView.openSecondAnim {
+                        check()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun check(){
+        val firstData = views[firstIndex].tag as CardData
+        val secondData = views[secondIndex].tag as CardData
+
+        if(firstData.id == secondData.id){
+            views[firstIndex].hideAnim()
+            views[secondIndex].hideAnim {
+                firstIndex = -1
+                secondIndex = -1
+                findCardCount += 2
+                isFinish()
+            }
+        }else{
+            views[firstIndex].closeAnim()
+            views[secondIndex].closeAnim {
+                firstIndex = -1
+                secondIndex = -1
+            }
+        }
+    }
+    private fun isFinish(){
+        if(findCardCount == level.verCount * level.verCount){
+            Toast.makeText(requireContext(), "FINISH", Toast.LENGTH_SHORT).show()
+        }
     }
 
 
-//    private fun onImageClicked(imageView: ImageView, imageResource: Int) {
-//        val index = views.indexOf(imageView)
-//        if (index == -1) return
-//        if (imageView.rotationY != 0f) return
-//
-//        if (clickCounts == 0) {
-//            firstClickIndex = index
-//
-//        imageView.animate()
-//            .setDuration(ANIMATION_DURATION)
-//            .rotationY(ROTATION_ANGLE)
-//            .withEndAction {
-//                imageView.rotationY = -ROTATION_ANGLE
-//                imageView.setImageResource(imageResource)
-//                imageView.animate()
-//                    .setDuration(ANIMATION_DURATION)
-//                    .rotationY(0f)
-//                    .start()
-//            }
-//            .start()
-//        } else if (clickCounts == 1) {
-//            secondClickIndex = index
-//            clickCounts++
-//            imageView.animate()
-//                .setDuration(ANIMATION_DURATION)
-//                .rotationY(ROTATION_ANGLE)
-//                .withEndAction {
-//                    imageView.rotationY = -ROTATION_ANGLE
-//                    imageView.setImageResource(R.drawable.image_back)
-//                    imageView.animate()
-//                        .setDuration(ANIMATION_DURATION)
-//                        .rotationY(0f)
-//                        .start()
-//                }
-//                .start()
-//
-//        }
-//    }
 }
+
+
+
+
+
+
+
+
+
+
 
 
 

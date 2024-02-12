@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/app_navigation"
+    app:startDestination="@id/homeScreen">
+    <fragment
+        android:id="@+id/homeScreen"
+        android:name="com.example.memorygame.presenter.screen.home.HomeScreen"
+        android:label="HomeScreen"
+        tools:layout="@layout/screen_level"
+        >
+        <action
+            android:id="@+id/action_homeScreen_to_gameScreen"
+            app:destination="@id/gameScreen" />
+    </fragment>
+    <fragment
+        android:id="@+id/gameScreen"
+        android:name="com.example.memorygame.presenter.screen.game.GameScreen"
+        android:label="GameScreen"
+        tools:layout="@layout/screen_game"
+        />
+</navigation>
